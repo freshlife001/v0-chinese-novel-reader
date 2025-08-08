@@ -199,42 +199,7 @@ export default function ImportPage() {
         }
 
         console.log('✅ 混合任务创建成功')
-        
-        // 更新任务标题
-        const taskResponse = await fetch('/api/import-tasks', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            taskId: newTaskId,
-            novelId,
-            novelTitle: novelInfo.title,
-            status: 'pending',
-            progress: 0,
-            importedCount: 0,
-            failedCount: 0,
-            skippedCount: importResult.skippedChapters || 0,
-            totalChapters: importResult.totalChapters || 0,
-            chapterQueue: chapterUrls,
-            logs: [
-              `📚 混合导入任务创建成功: ${novelInfo.title}`,
-              `📋 总章节数: ${importResult.totalChapters}`,
-              `📋 待导入章节: ${importResult.pendingChapters}`,
-              `📋 已跳过章节: ${importResult.skippedChapters}`,
-              `⏰ 每日CronJob自动处理`,
-              `🚀 可使用外部程序加速处理`,
-              `📡 外部API: ${window.location.origin}/api/process-import-queue`
-            ],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            hybrid: true // 标记为混合任务
-          })
-        })
-
-        if (taskResponse.ok) {
-          console.log('✅ 任务信息更新成功')
-        }
+        console.log('✅ import任务已通过 api/save-novel 创建，无需重复创建')
       } else {
         console.log('⚠️ 没有需要导入的章节')
       }

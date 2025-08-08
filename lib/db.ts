@@ -42,6 +42,8 @@ export interface ImportTask {
   importedChapters: number
   failedChapters: number
   errorMessage?: string
+  sourceUrl?: string
+  indexPageHtml?: string
   createdAt: string
   updatedAt: string
 }
@@ -268,22 +270,28 @@ export async function createImportTask(task: Omit<ImportTask, 'id' | 'createdAt'
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   
+  if (!task.novelId) {
+    throw new Error('novelId is required for import tasks')
+  }
+  
   try {
     await client.execute({
       sql: `
         INSERT INTO import_tasks (
-          id, novel_id, task_type, status, total_chapters, imported_chapters, failed_chapters, error_message, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, novel_id, task_type, status, total_chapters, imported_chapters, failed_chapters, error_message, source_url, index_page_html, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       args: [
         id,
-        task.novelId || null,
+        task.novelId,
         task.taskType,
         task.status,
         Number(task.totalChapters) || 0,
         Number(task.importedChapters) || 0,
         Number(task.failedChapters) || 0,
         task.errorMessage || null,
+        task.sourceUrl || null,
+        task.indexPageHtml || null,
         now,
         now
       ]
@@ -348,6 +356,8 @@ export async function updateImportTask(id: string, updates: Partial<ImportTask>)
       importedChapters: task.imported_chapters,
       failedChapters: task.failed_chapters,
       errorMessage: task.error_message,
+      sourceUrl: task.source_url,
+      indexPageHtml: task.index_page_html,
       createdAt: task.created_at,
       updatedAt: task.updated_at
     } as unknown as ImportTask
@@ -376,6 +386,8 @@ export async function getImportTask(id: string): Promise<ImportTask | null> {
       importedChapters: task.imported_chapters,
       failedChapters: task.failed_chapters,
       errorMessage: task.error_message,
+      sourceUrl: task.source_url,
+      indexPageHtml: task.index_page_html,
       createdAt: task.created_at,
       updatedAt: task.updated_at
     } as unknown as ImportTask
@@ -398,6 +410,8 @@ export async function getAllImportTasks(): Promise<ImportTask[]> {
           imported_chapters as "importedChapters",
           failed_chapters as "failedChapters",
           error_message as "errorMessage",
+          source_url as "sourceUrl",
+          index_page_html as "indexPageHtml",
           created_at as "createdAt",
           updated_at as "updatedAt"
         FROM import_tasks 
@@ -426,6 +440,8 @@ export async function getPendingImportTasks(limit: number = 10): Promise<ImportT
           imported_chapters as "importedChapters",
           failed_chapters as "failedChapters",
           error_message as "errorMessage",
+          source_url as "sourceUrl",
+          index_page_html as "indexPageHtml",
           created_at as "createdAt",
           updated_at as "updatedAt"
         FROM import_tasks 
@@ -440,6 +456,148 @@ export async function getPendingImportTasks(limit: number = 10): Promise<ImportT
   } catch (error) {
     console.error('Error getting pending import tasks:', error)
     return []
+  }
+}
+
+export async function deleteImportTask(id: string): Promise<boolean> {
+  try {
+    await client.execute({
+      sql: 'DELETE FROM import_tasks WHERE id = ?',
+      args: [id]
+    })
+    return true
+  } catch (error) {
+    console.error('Error deleting import task:', error)
+    return false
+  }
+}
+
+// Chapter URLs management functions
+export interface ChapterUrl {
+  id: number
+  taskId: string
+  novelId: string
+  chapterNumber: number
+  title: string
+  url: string
+  isVip: boolean
+  status: 'pending' | 'imported' | 'failed'
+  errorMessage?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export async function createChapterUrls(taskId: string, novelId: string, chapters: Array<{id: number; title: string; url: string; isVip: boolean}>): Promise<boolean> {
+  try {
+    for (const chapter of chapters) {
+      await client.execute({
+        sql: `
+          INSERT INTO chapter_urls (
+            task_id, novel_id, chapter_number, title, url, is_vip, status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `,
+        args: [
+          taskId,
+          novelId,
+          chapter.id,
+          chapter.title,
+          chapter.url,
+          chapter.isVip || false,
+          'pending'
+        ]
+      })
+    }
+    return true
+  } catch (error) {
+    console.error('Error creating chapter URLs:', error)
+    return false
+  }
+}
+
+export async function getPendingChapterUrls(taskId: string, limit: number = 15): Promise<ChapterUrl[]> {
+  try {
+    const result = await client.execute({
+      sql: `
+        SELECT 
+          id,
+          task_id as "taskId",
+          novel_id as "novelId",
+          chapter_number as "chapterNumber",
+          title,
+          url,
+          is_vip as "isVip",
+          status,
+          error_message as "errorMessage",
+          created_at as "createdAt",
+          updated_at as "updatedAt"
+        FROM chapter_urls 
+        WHERE task_id = ? AND status = 'pending'
+        ORDER BY chapter_number ASC
+        LIMIT ?
+      `,
+      args: [taskId, limit]
+    })
+    
+    return result.rows as unknown as ChapterUrl[]
+  } catch (error) {
+    console.error('Error getting pending chapter URLs:', error)
+    return []
+  }
+}
+
+export async function updateChapterUrl(id: number, updates: Partial<ChapterUrl>): Promise<ChapterUrl | null> {
+  try {
+    const fields = []
+    const args = []
+    
+    for (const [key, value] of Object.entries(updates)) {
+      if (key === 'id' || key === 'createdAt' || key === 'updatedAt') continue
+      
+      const dbField = key.replace(/([A-Z])/g, '_$1').toLowerCase()
+      fields.push(`${dbField} = ?`)
+      
+      if (key === 'isVip') {
+        args.push(value ? 1 : 0)
+      } else if (value === undefined || value === null) {
+        args.push(null)
+      } else {
+        args.push(value)
+      }
+    }
+    
+    if (fields.length === 0) return null
+    
+    args.push(id)
+    
+    await client.execute({
+      sql: `UPDATE chapter_urls SET ${fields.join(', ')} WHERE id = ?`,
+      args
+    })
+    
+    const result = await client.execute({
+      sql: 'SELECT * FROM chapter_urls WHERE id = ?',
+      args: [id]
+    })
+    
+    const chapterUrl = result.rows[0]
+    if (!chapterUrl) return null
+    
+    return {
+      id: chapterUrl.id,
+      taskId: chapterUrl.task_id,
+      novelId: chapterUrl.novel_id,
+      chapterNumber: chapterUrl.chapter_number,
+      title: chapterUrl.title,
+      url: chapterUrl.url,
+      isVip: chapterUrl.is_vip,
+      status: chapterUrl.status,
+      errorMessage: chapterUrl.error_message,
+      createdAt: chapterUrl.created_at,
+      updatedAt: chapterUrl.updated_at
+    } as unknown as ChapterUrl
+  } catch (error) {
+    console.error('Error updating chapter URL:', error)
+    throw error
   }
 }
 

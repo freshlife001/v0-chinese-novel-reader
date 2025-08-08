@@ -37,15 +37,35 @@ CREATE TABLE IF NOT EXISTS chapters (
 CREATE TABLE IF NOT EXISTS import_tasks (
   id TEXT PRIMARY KEY,
   novel_id TEXT,
-  task_type TEXT NOT NULL, -- 'import', 'update', 'retry'
-  status TEXT NOT NULL, -- 'pending', 'in_progress', 'completed', 'failed'
+  task_type TEXT NOT NULL, 
+  status TEXT NOT NULL, 
   total_chapters INTEGER DEFAULT 0,
   imported_chapters INTEGER DEFAULT 0,
   failed_chapters INTEGER DEFAULT 0,
   error_message TEXT,
+  source_url TEXT,
+  index_page_html TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
+);
+
+-- Chapter URLs table (for tracking chapters to import)
+CREATE TABLE IF NOT EXISTS chapter_urls (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id TEXT NOT NULL,
+  novel_id TEXT NOT NULL,
+  chapter_number INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  is_vip BOOLEAN DEFAULT FALSE,
+  status TEXT DEFAULT 'pending', 
+  error_message TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (task_id) REFERENCES import_tasks(id) ON DELETE CASCADE,
+  FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE,
+  UNIQUE(task_id, chapter_number)
 );
 
 -- Indexes for better performance
@@ -57,8 +77,11 @@ CREATE INDEX IF NOT EXISTS idx_chapters_novel_id ON chapters(novel_id);
 CREATE INDEX IF NOT EXISTS idx_chapters_novel_number ON chapters(novel_id, chapter_number);
 CREATE INDEX IF NOT EXISTS idx_import_tasks_status ON import_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_import_tasks_novel_id ON import_tasks(novel_id);
+CREATE INDEX IF NOT EXISTS idx_chapter_urls_task_id ON chapter_urls(task_id);
+CREATE INDEX IF NOT EXISTS idx_chapter_urls_task_number ON chapter_urls(task_id, chapter_number);
+CREATE INDEX IF NOT EXISTS idx_chapter_urls_status ON chapter_urls(status);
 
--- Trigger to update updated_at timestamp
+
 CREATE TRIGGER IF NOT EXISTS update_novels_updated_at 
   AFTER UPDATE ON novels
   FOR EACH ROW
@@ -78,4 +101,11 @@ CREATE TRIGGER IF NOT EXISTS update_import_tasks_updated_at
   FOR EACH ROW
 BEGIN
   UPDATE import_tasks SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS update_chapter_urls_updated_at 
+  AFTER UPDATE ON chapter_urls
+  FOR EACH ROW
+BEGIN
+  UPDATE chapter_urls SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;

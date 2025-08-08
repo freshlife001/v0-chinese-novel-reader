@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createImportTask, getImportTask, updateImportTask, getAllImportTasks } from '@/lib/db'
+import { createImportTask, getImportTask, updateImportTask, getAllImportTasks, deleteImportTask, createChapterUrls } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,7 +8,24 @@ export async function GET(request: NextRequest) {
     }
 
     const tasks = await getAllImportTasks()
-    return NextResponse.json({ tasks })
+    
+    // Transform database tasks to match frontend interface
+    const transformedTasks = tasks.map(task => ({
+      taskId: task.id,
+      novelId: task.novelId,
+      status: task.status === 'in_progress' ? 'processing' : task.status,
+      progress: task.totalChapters > 0 ? Math.round((task.importedChapters / task.totalChapters) * 100) : 0,
+      importedCount: task.importedChapters,
+      failedCount: task.failedChapters,
+      skippedCount: 0, // Not tracked in current schema
+      totalChapters: task.totalChapters,
+      logs: [`任务创建于 ${new Date(task.createdAt).toLocaleString()}`],
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      error: task.errorMessage
+    }))
+    
+    return NextResponse.json({ tasks: transformedTasks })
   } catch (error) {
     console.error('Get import tasks error:', error)
     return NextResponse.json({ tasks: [] })
@@ -23,8 +40,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: '数据库服务未配置' }, { status: 500 })
     }
 
-    // TODO: Implement task deletion from database
-    return NextResponse.json({ success: true })
+    const success = await deleteImportTask(taskId)
+    
+    if (success) {
+      return NextResponse.json({ success: true })
+    } else {
+      return NextResponse.json({ error: '删除任务失败' }, { status: 500 })
+    }
   } catch (error) {
     console.error('Delete import task error:', error)
     return NextResponse.json({ error: '删除任务失败' }, { status: 500 })
@@ -56,13 +78,15 @@ export async function POST(request: NextRequest) {
     
     console.log('✅ 任务创建成功:', {
       taskId: task.id,
-      novelId: task.novelId
+      novelId: task.novelId,
+      chaptersCount: taskData.chapters?.length || 0
     })
     
     return NextResponse.json({ 
       success: true, 
       taskId: task.id,
-      novelId: task.novelId
+      novelId: task.novelId,
+      chaptersCount: taskData.chapters?.length || 0
     })
   } catch (error) {
     console.error('❌ 创建导入任务失败:', error)

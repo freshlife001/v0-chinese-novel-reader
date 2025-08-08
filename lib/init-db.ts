@@ -1,4 +1,6 @@
 import { createClient } from '@libsql/client'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import dotenv from 'dotenv'
 
 // Load environment variables from .env file
@@ -13,85 +15,54 @@ export async function initializeDatabase() {
   try {
     console.log('Initializing database...')
     
-    // Define all SQL statements manually to avoid parsing issues
-    const statements = [
-      // Tables
-      `CREATE TABLE IF NOT EXISTS novels (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        author TEXT NOT NULL,
-        description TEXT,
-        category TEXT DEFAULT '其他',
-        cover TEXT,
-        status TEXT DEFAULT '连载中',
-        source TEXT,
-        word_count INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        last_update TEXT,
-        latest_chapter TEXT
-      )`,
+    // Read schema.sql file
+    const schemaPath = join(__dirname, 'schema.sql')
+    const schemaContent = readFileSync(schemaPath, 'utf8')
+    
+    // Parse SQL statements more carefully to handle triggers with multiple statements
+    const statements = []
+    let currentStatement = ''
+    let inTrigger = false
+    
+    const lines = schemaContent.split('\n')
+    for (const line of lines) {
+      const trimmedLine = line.trim()
       
-      `CREATE TABLE IF NOT EXISTS chapters (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        novel_id TEXT NOT NULL,
-        chapter_number INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        url TEXT,
-        is_vip BOOLEAN DEFAULT FALSE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE,
-        UNIQUE(novel_id, chapter_number)
-      )`,
+      // Skip empty lines and comments
+      if (trimmedLine === '' || trimmedLine.startsWith('--')) {
+        continue
+      }
       
-      `CREATE TABLE IF NOT EXISTS import_tasks (
-        id TEXT PRIMARY KEY,
-        novel_id TEXT,
-        task_type TEXT NOT NULL,
-        status TEXT NOT NULL,
-        total_chapters INTEGER DEFAULT 0,
-        imported_chapters INTEGER DEFAULT 0,
-        failed_chapters INTEGER DEFAULT 0,
-        error_message TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (novel_id) REFERENCES novels(id) ON DELETE CASCADE
-      )`,
+      currentStatement += line + '\n'
       
-      // Indexes
-      `CREATE INDEX IF NOT EXISTS idx_novels_title ON novels(title)`,
-      `CREATE INDEX IF NOT EXISTS idx_novels_author ON novels(author)`,
-      `CREATE INDEX IF NOT EXISTS idx_novels_category ON novels(category)`,
-      `CREATE INDEX IF NOT EXISTS idx_novels_created_at ON novels(created_at DESC)`,
-      `CREATE INDEX IF NOT EXISTS idx_chapters_novel_id ON chapters(novel_id)`,
-      `CREATE INDEX IF NOT EXISTS idx_chapters_novel_number ON chapters(novel_id, chapter_number)`,
-      `CREATE INDEX IF NOT EXISTS idx_import_tasks_status ON import_tasks(status)`,
-      `CREATE INDEX IF NOT EXISTS idx_import_tasks_novel_id ON import_tasks(novel_id)`,
+      // Check if we're in a trigger
+      if (trimmedLine.toUpperCase().includes('CREATE TRIGGER')) {
+        inTrigger = true
+      }
       
-      // Triggers
-      `CREATE TRIGGER IF NOT EXISTS update_novels_updated_at 
-        AFTER UPDATE ON novels
-        FOR EACH ROW
-      BEGIN
-        UPDATE novels SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-      END`,
-      
-      `CREATE TRIGGER IF NOT EXISTS update_chapters_updated_at 
-        AFTER UPDATE ON chapters
-        FOR EACH ROW
-      BEGIN
-        UPDATE chapters SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-      END`,
-      
-      `CREATE TRIGGER IF NOT EXISTS update_import_tasks_updated_at 
-        AFTER UPDATE ON import_tasks
-        FOR EACH ROW
-      BEGIN
-        UPDATE import_tasks SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-      END`
-    ]
+      // End of statement (semicolon) and not in trigger middle
+      if (trimmedLine.endsWith(';') && !inTrigger) {
+        const cleaned = currentStatement.trim()
+        if (cleaned.length > 0) {
+          statements.push(cleaned)
+        }
+        currentStatement = ''
+      } 
+      // End of trigger (END;)
+      else if (trimmedLine === 'END;' && inTrigger) {
+        const cleaned = currentStatement.trim()
+        if (cleaned.length > 0) {
+          statements.push(cleaned)
+        }
+        currentStatement = ''
+        inTrigger = false
+      }
+    }
+    
+    // Add any remaining statement
+    if (currentStatement.trim().length > 0) {
+      statements.push(currentStatement.trim())
+    }
     
     console.log(`Found ${statements.length} SQL statements to execute`)
     
@@ -117,7 +88,7 @@ export async function initializeDatabase() {
     // Verify tables exist
     const tables = await client.execute(`
       SELECT name FROM sqlite_master 
-      WHERE type='table' AND name IN ('novels', 'chapters', 'import_tasks')
+      WHERE type='table' AND name IN ('novels', 'chapters', 'import_tasks', 'chapter_urls')
     `)
     
     console.log('Verified tables:', tables.rows.map(row => row.name))

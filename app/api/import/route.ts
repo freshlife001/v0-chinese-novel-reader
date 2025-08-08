@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const $ = cheerio.load(html)
 
     // 严格按照提供的选择器解析小说信息
-    const novelInfo = parseNovelWithSelectors($, url)
+    const novelInfo = parseNovelWithSelectors($, url, html)
 
     if (!novelInfo.title) {
       return NextResponse.json({ 
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function parseNovelWithSelectors($: cheerio.CheerioAPI, url: string) {
+function parseNovelWithSelectors($: cheerio.CheerioAPI, url: string, html: string) {
   try {
     // 严格使用提供的选择器
     // 小说标题: div:nth-child(2) > div > div.info-main > div > h1
@@ -121,7 +121,8 @@ function parseNovelWithSelectors($: cheerio.CheerioAPI, url: string) {
       lastUpdate: '', // 未提供更新时间选择器
       latestChapter: chapters.length > 0 ? chapters[chapters.length - 1].title : '',
       wordCount: chapters.length * 2000, // 估算字数
-      source: url
+      source: url,
+      indexPageHtml: html // 保存索引页HTML
     }
   } catch (error) {
     console.error('解析小说信息时出错:', error)
@@ -133,7 +134,8 @@ function parseNovelWithSelectors($: cheerio.CheerioAPI, url: string) {
       chapters: [],
       cover: '',
       status: '未知',
-      source: url
+      source: url,
+      indexPageHtml: html || ''
     }
   }
 }

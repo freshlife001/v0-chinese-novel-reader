@@ -1,3 +1,5 @@
+'use client'
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Database, CheckCircle, XCircle, Loader2 } from 'lucide-react'
@@ -15,7 +17,7 @@ export default function DatabaseTestPage() {
       const data = await response.json()
       setTestResults(data)
     } catch (error) {
-      setTestResults({ error: '测试失败: ' + error.message })
+      setTestResults({ error: '测试失败: ' + (error instanceof Error ? error.message : '未知错误') })
     } finally {
       setIsLoading(false)
     }
