@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as cheerio from 'cheerio'
+import { getNovelById, getChaptersByNovelId, createNovel, createImportTask } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     
     if (existingNovel) {
       // 如果小说已存在，返回续导信息
-      const resumeInfo = await getResumeImportInfo(existingNovel, novelInfo.chapters)
+      const resumeInfo = await getResumeImportInfo(existingNovel.id, novelInfo.chapters)
       
       return NextResponse.json({ 
         success: true, 
@@ -140,41 +141,15 @@ function parseNovelWithSelectors($: cheerio.CheerioAPI, url: string) {
 // 检查是否已存在相同的小说
 async function checkExistingNovel(title: string, author: string) {
   try {
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return null
-    }
-
-    const { list } = await import('@vercel/blob')
+    const { getAllNovels } = await import('@/lib/db')
+    const novels = await getAllNovels()
     
-    // 获取所有小说文件
-    const { blobs } = await list({
-      prefix: 'novels/',
-      limit: 100
-    })
-    
-    const novelBlobs = blobs.filter(blob => 
-      blob.pathname.startsWith('novels/') && 
-      blob.pathname.endsWith('.json') && 
-      !blob.pathname.includes('index.json')
+    // 查找匹配的小说
+    const existingNovel = novels.find(novel => 
+      novel.title === title && novel.author === author
     )
     
-    // 检查每个小说是否匹配
-    for (const blob of novelBlobs) {
-      try {
-        const response = await fetch(blob.url)
-        if (response.ok) {
-          const novel = await response.json()
-          // 匹配标题和作者
-          if (novel.title === title && novel.author === author) {
-            return novel
-          }
-        }
-      } catch (error) {
-        console.error('检查小说时出错:', error)
-      }
-    }
-    
-    return null
+    return existingNovel || null
   } catch (error) {
     console.error('检查已存在小说时出错:', error)
     return null
@@ -182,41 +157,22 @@ async function checkExistingNovel(title: string, author: string) {
 }
 
 // 获取续导信息
-async function getResumeImportInfo(existingNovel: any, latestChapters: any[]) {
+async function getResumeImportInfo(existingNovelId: string, latestChapters: any[]) {
   try {
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return {
-        totalChapters: latestChapters.length,
-        importedChapters: 0,
-        pendingChapters: latestChapters,
-        newChapters: [],
-        message: 'Blob 存储未配置'
-      }
-    }
-
-    const { list } = await import('@vercel/blob')
+    const { getChaptersByNovelId } = await import('@/lib/db')
     
     // 获取已导入的章节
-    const { blobs } = await list({
-      prefix: `chapters/${existingNovel.id}/`,
-      limit: 1000
-    })
-    
-    const importedChapterIds = new Set(
-      blobs.map(blob => {
-        const match = blob.pathname.match(/chapters\/[^\/]+\/(\d+)\.json$/)
-        return match ? parseInt(match[1]) : null
-      }).filter(id => id !== null)
-    )
+    const importedChapters = await getChaptersByNovelId(existingNovelId)
+    const importedChapterIds = new Set(importedChapters.map(ch => ch.chapterNumber))
     
     console.log('已导入章节IDs:', Array.from(importedChapterIds))
     console.log('最新章节数量:', latestChapters.length)
-    console.log('已存在小说章节数量:', existingNovel.chapters?.length || 0)
+    console.log('已存在小说章节数量:', importedChapters.length)
     
     // 分析章节状态
     const pendingChapters = []
     const newChaptersToImport = []
-    const existingChapterCount = existingNovel.chapters?.length || 0
+    const existingChapterCount = importedChapters.length
     
     // 遍历最新获取的章节列表
     latestChapters.forEach((chapter, index) => {

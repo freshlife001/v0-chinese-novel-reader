@@ -121,13 +121,13 @@ export default function HomePage() {
       </section>
 
       {/* Configuration Notice */}
-      {!process.env.BLOB_READ_WRITE_TOKEN && (
+      {!process.env.TURSO_DATABASE_URL && (
         <section className="py-4 bg-yellow-50 border-b">
           <div className="container mx-auto px-4">
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <strong>配置提醒：</strong> Vercel Blob 存储尚未配置。请在 Vercel 项目设置中添加 Blob 存储集成以启用小说导入功能。
+                <strong>配置提醒：</strong> Turso 数据库尚未配置。请在环境变量中设置 TURSO_DATABASE_URL 和 TURSO_AUTH_TOKEN 以启用小说导入功能。
                 <Link href="/admin/import" className="ml-2 text-blue-600 hover:underline">
                   前往导入页面
                 </Link>

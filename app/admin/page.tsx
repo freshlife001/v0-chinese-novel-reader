@@ -30,25 +30,25 @@ export default function AdminPage() {
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Blob 存储测试 */}
-          <Card className="hover:shadow-lg transition-shadow border-blue-200">
+          {/* 数据库测试 */}
+          <Card className="hover:shadow-lg transition-shadow border-green-200">
             <CardHeader>
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <TestTube className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Database className="h-6 w-6 text-green-600" />
                 </div>
                 <div>
-                  <CardTitle>存储测试</CardTitle>
-                  <CardDescription>验证 Blob 存储配置</CardDescription>
+                  <CardTitle>数据库测试</CardTitle>
+                  <CardDescription>验证数据库连接</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-gray-600 mb-4">
-                测试 Vercel Blob 存储连接和功能
+                测试 Turso 数据库连接和功能
               </p>
-              <Link href="/admin/blob-test">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700">开始测试</Button>
+              <Link href="/admin/db-test">
+                <Button className="w-full bg-green-600 hover:bg-green-700">开始测试</Button>
               </Link>
             </CardContent>
           </Card>
@@ -181,10 +181,10 @@ export default function AdminPage() {
         <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">快速开始</h3>
           <div className="flex flex-wrap gap-4">
-            <Link href="/admin/blob-test">
+            <Link href="/admin/db-test">
               <Button variant="outline" className="bg-white">
-                <TestTube className="h-4 w-4 mr-2" />
-                测试存储
+                <Database className="h-4 w-4 mr-2" />
+                测试数据库
               </Button>
             </Link>
             <Link href="/admin/import">

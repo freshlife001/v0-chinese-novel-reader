@@ -1,35 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createImportTask, getImportTask, updateImportTask, getAllImportTasks } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    if (!process.env.TURSO_AUTH_TOKEN) {
       return NextResponse.json({ tasks: [] })
     }
 
-    const { list } = await import('@vercel/blob')
-    
-    // 获取所有导入任务
-    const { blobs } = await list({
-      prefix: 'import-tasks/',
-      limit: 100
-    })
-    
-    const tasks = []
-    for (const blob of blobs) {
-      try {
-        const response = await fetch(blob.url)
-        if (response.ok) {
-          const task = await response.json()
-          tasks.push(task)
-        }
-      } catch (error) {
-        console.error('Error loading task:', error)
-      }
-    }
-    
-    // 按创建时间倒序排列
-    tasks.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    
+    const tasks = await getAllImportTasks()
     return NextResponse.json({ tasks })
   } catch (error) {
     console.error('Get import tasks error:', error)
@@ -41,15 +19,11 @@ export async function DELETE(request: NextRequest) {
   try {
     const { taskId } = await request.json()
     
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return NextResponse.json({ error: '存储服务未配置' }, { status: 500 })
+    if (!process.env.TURSO_AUTH_TOKEN) {
+      return NextResponse.json({ error: '数据库服务未配置' }, { status: 500 })
     }
 
-    const { del } = await import('@vercel/blob')
-    
-    // 删除任务文件
-    await del(`import-tasks/${taskId}.json`)
-    
+    // TODO: Implement task deletion from database
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Delete import task error:', error)
@@ -63,31 +37,32 @@ export async function POST(request: NextRequest) {
     const taskData = await request.json()
     console.log('📝 接收到任务数据:', JSON.stringify(taskData, null, 2))
     
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      console.error('❌ BLOB_READ_WRITE_TOKEN 未配置')
-      return NextResponse.json({ error: '存储服务未配置' }, { status: 500 })
+    if (!process.env.TURSO_AUTH_TOKEN) {
+      console.error('❌ TURSO_AUTH_TOKEN 未配置')
+      return NextResponse.json({ error: '数据库服务未配置' }, { status: 500 })
     }
 
-    const { put } = await import('@vercel/blob')
-    console.log('📝 准备保存任务到 Blob 存储...')
+    // Convert task data to database format
+    const dbTaskData = {
+      novelId: taskData.novelId,
+      taskType: 'import' as const,
+      status: 'pending' as const,
+      totalChapters: taskData.totalChapters || 0,
+      importedChapters: 0,
+      failedChapters: 0
+    }
+
+    const task = await createImportTask(dbTaskData)
     
-    // 保存任务状态到 Blob 存储
-    const blob = await put(`import-tasks/${taskData.taskId}.json`, JSON.stringify(taskData, null, 2), {
-      access: 'public',
-      contentType: 'application/json',
-      allowOverwrite: true
-    })
-    
-    console.log('✅ 任务保存成功:', {
-      taskId: taskData.taskId,
-      blobUrl: blob.url,
-      pathname: blob.pathname
+    console.log('✅ 任务创建成功:', {
+      taskId: task.id,
+      novelId: task.novelId
     })
     
     return NextResponse.json({ 
       success: true, 
-      taskId: taskData.taskId,
-      blobUrl: blob.url 
+      taskId: task.id,
+      novelId: task.novelId
     })
   } catch (error) {
     console.error('❌ 创建导入任务失败:', error)

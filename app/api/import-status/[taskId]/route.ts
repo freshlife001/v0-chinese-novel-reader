@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getImportTask } from '@/lib/db'
 
 export async function GET(
   request: NextRequest,
@@ -7,30 +8,17 @@ export async function GET(
   try {
     const taskId = params.taskId
     
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return NextResponse.json({ error: '存储服务未配置' }, { status: 500 })
+    if (!process.env.TURSO_AUTH_TOKEN) {
+      return NextResponse.json({ error: '数据库服务未配置' }, { status: 500 })
     }
 
-    const { list } = await import('@vercel/blob')
+    const task = await getImportTask(taskId)
     
-    // 获取任务状态
-    const { blobs } = await list({
-      prefix: `import-tasks/${taskId}.json`,
-      limit: 1
-    })
-    
-    if (blobs.length === 0) {
+    if (!task) {
       return NextResponse.json({ error: '任务不存在' }, { status: 404 })
     }
-
-    const response = await fetch(blobs[0].url)
-    if (!response.ok) {
-      return NextResponse.json({ error: '获取任务状态失败' }, { status: 500 })
-    }
-
-    const taskStatus = await response.json()
     
-    return NextResponse.json({ task: taskStatus })
+    return NextResponse.json({ task })
   } catch (error) {
     console.error('Get import status error:', error)
     return NextResponse.json({ error: '获取导入状态失败' }, { status: 500 })

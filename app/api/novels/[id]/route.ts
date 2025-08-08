@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getNovelById, getChaptersByNovelId } from '@/lib/db'
 
 export async function GET(
   request: NextRequest,
@@ -7,32 +8,26 @@ export async function GET(
   try {
     const novelId = params.id
     
-    // Check if we have Blob storage configured
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return NextResponse.json({ error: '存储服务未配置' }, { status: 500 })
-    }
-
-    // Import Vercel Blob functions only if token is available
-    const { list } = await import('@vercel/blob')
+    const novel = await getNovelById(novelId)
     
-    // Get novel from Blob storage
-    const { blobs } = await list({
-      prefix: `novels/${novelId}.json`,
-      limit: 1
-    })
-    
-    if (blobs.length === 0) {
+    if (!novel) {
       return NextResponse.json({ error: '小说不存在' }, { status: 404 })
     }
 
-    const response = await fetch(blobs[0].url)
-    if (!response.ok) {
-      return NextResponse.json({ error: '获取小说信息失败' }, { status: 500 })
-    }
-
-    const novel = await response.json()
+    // Get chapters for this novel
+    const chapters = await getChaptersByNovelId(novelId)
     
-    return NextResponse.json({ novel })
+    return NextResponse.json({ 
+      novel: {
+        ...novel,
+        chapters: chapters.map(ch => ({
+          id: ch.chapterNumber,
+          title: ch.title,
+          url: ch.url,
+          isVip: ch.isVip
+        }))
+      }
+    })
   } catch (error) {
     console.error('Get novel error:', error)
     return NextResponse.json({ error: '获取小说信息失败' }, { status: 500 })
