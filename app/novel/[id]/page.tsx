@@ -10,6 +10,7 @@ import { BookOpen, Star, Users, Clock, Heart, Share2, MessageCircle, ChevronRigh
 import Link from "next/link"
 import Image from "next/image"
 import { useEffect, useState } from "react"
+import React from "react"
 import {
   Select,
   SelectContent,
@@ -19,6 +20,10 @@ import {
 } from "@/components/ui/select"
 
 export default function NovelDetailPage({ params }: { params: { id: string } }) {
+  // 解包params属性
+  const resolvedParams = React.use(params)
+  const { id } = resolvedParams
+  
   const [novel, setNovel] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -30,7 +35,7 @@ export default function NovelDetailPage({ params }: { params: { id: string } }) 
 
   useEffect(() => {
     // 获取小说详情
-    fetch(`/api/novels/${params.id}`)
+    fetch(`/api/novels/${id}`)
       .then(res => res.json())
       .then(data => {
         if (data.novel) {
@@ -45,7 +50,7 @@ export default function NovelDetailPage({ params }: { params: { id: string } }) 
         setError('获取小说详情失败')
         setLoading(false)
       })
-  }, [params.id])
+  }, [id])
 
   if (loading) {
     return (
@@ -87,6 +92,35 @@ export default function NovelDetailPage({ params }: { params: { id: string } }) 
   // 显示最新章节和开始章节
   const latestChapters = novel.chapters?.slice(-5) || []
   const firstChapters = novel.chapters?.slice(0, 5) || []
+
+  // 获取用户的阅读进度
+  const getUserReadingProgress = () => {
+    if (typeof window !== 'undefined') {
+      const progress = localStorage.getItem(`novel_${id}_progress`)
+      return progress ? JSON.parse(progress) : null
+    }
+    return null
+  }
+
+  // 检查用户是否有阅读进度
+  const hasReadingProgress = () => {
+    const progress = getUserReadingProgress()
+    return progress !== null
+  }
+
+  // 获取继续阅读的章节链接
+  const getContinueReadingChapter = () => {
+    const progress = getUserReadingProgress()
+    if (progress && progress.chapterId && novel.chapters && novel.chapters.length > 0) {
+      // 查找用户上次阅读的章节
+      const chapter = novel.chapters.find((ch: any) => ch.id.toString() === progress.chapterId.toString())
+      if (chapter) {
+        return chapter
+      }
+    }
+    // 如果没有找到上次阅读的章节，默认返回最新章节
+    return novel.chapters[novel.chapters.length - 1]
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -158,12 +192,22 @@ export default function NovelDetailPage({ params }: { params: { id: string } }) 
 
                     <div className="flex flex-wrap gap-3">
                       {novel.chapters && novel.chapters.length > 0 && (
-                        <Link href={`/novel/${novel.id}/chapter/${novel.chapters[0].id}`}>
-                          <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
-                            <BookOpen className="h-5 w-5 mr-2" />
-                            开始阅读
-                          </Button>
-                        </Link>
+                        <>
+                          <Link href={`/novel/${novel.id}/chapter/${novel.chapters[0].id}`}>
+                            <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
+                              <BookOpen className="h-5 w-5 mr-2" />
+                              从头阅读
+                            </Button>
+                          </Link>
+                          {hasReadingProgress() && (
+                            <Link href={`/novel/${novel.id}/chapter/${getContinueReadingChapter().id}`}>
+                              <Button size="lg" variant="outline">
+                                <BookOpen className="h-5 w-5 mr-2" />
+                                继续阅读
+                              </Button>
+                            </Link>
+                          )}
+                        </>
                       )}
                       <Button variant="outline" size="lg">
                         <Heart className="h-5 w-5 mr-2" />
@@ -541,7 +585,7 @@ export default function NovelDetailPage({ params }: { params: { id: string } }) 
                     </Link>
                   </Button>
                   <Button variant="outline" className="w-full" asChild>
-                    <Link href={`/novel/${novel.id}/chapter/${novel.chapters[novel.chapters.length - 1].id}`}>
+                    <Link href={`/novel/${novel.id}/chapter/${getContinueReadingChapter().id}`}>
                       继续阅读
                     </Link>
                   </Button>

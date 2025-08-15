@@ -9,12 +9,17 @@ import { BookOpen, ChevronLeft, ChevronRight, Settings, Moon, Sun, Type, Bookmar
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import React from "react"
 
 export default function ChapterPage({ 
   params 
 }: { 
   params: { id: string; chapterId: string } 
 }) {
+  // 解包params属性
+  const resolvedParams = React.use(params)
+  const { id, chapterId } = resolvedParams
+  
   const router = useRouter()
   const [fontSize, setFontSize] = useState([18])
   const [isDarkMode, setIsDarkMode] = useState(false)
@@ -29,10 +34,20 @@ export default function ChapterPage({
     // 页面加载时滚动到顶部
     window.scrollTo({ top: 0, behavior: 'smooth' })
     
+    // 保存用户的阅读进度到本地存储
+    if (typeof window !== 'undefined' && id && chapterId) {
+      const progress = {
+        novelId: id,
+        chapterId: chapterId,
+        timestamp: new Date().toISOString()
+      }
+      localStorage.setItem(`novel_${id}_progress`, JSON.stringify(progress))
+    }
+    
     // 获取章节内容和小说信息
     Promise.all([
-      fetch(`/api/novels/${params.id}/chapters/${params.chapterId}`),
-      fetch(`/api/novels/${params.id}`)
+      fetch(`/api/novels/${id}/chapters/${chapterId}`),
+      fetch(`/api/novels/${id}`)
     ])
       .then(([chapterRes, novelRes]) => Promise.all([chapterRes.json(), novelRes.json()]))
       .then(([chapterData, novelData]) => {
@@ -53,7 +68,7 @@ export default function ChapterPage({
         setError('获取章节内容失败')
         setLoading(false)
       })
-  }, [params.id, params.chapterId])
+  }, [id, chapterId])
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode)
@@ -68,9 +83,19 @@ export default function ChapterPage({
     // 先滚动到顶部，然后导航
     window.scrollTo({ top: 0, behavior: 'smooth' })
     
+    // 保存用户的阅读进度到本地存储
+    if (typeof window !== 'undefined' && id && chapterId) {
+      const progress = {
+        novelId: id,
+        chapterId: chapterId,
+        timestamp: new Date().toISOString()
+      }
+      localStorage.setItem(`novel_${id}_progress`, JSON.stringify(progress))
+    }
+    
     // 稍微延迟导航，确保滚动动画完成
     setTimeout(() => {
-      router.push(`/novel/${params.id}/chapter/${chapterId}`)
+      router.push(`/novel/${id}/chapter/${chapterId}`)
     }, 300)
   }
 
@@ -82,7 +107,7 @@ export default function ChapterPage({
         return
       }
 
-      const currentChapterIndex = novel?.chapters?.findIndex((ch: any) => ch.id.toString() === params.chapterId) ?? -1
+      const currentChapterIndex = novel?.chapters?.findIndex((ch: any) => ch.id.toString() === chapterId) ?? -1
       
       if (event.key === 'ArrowLeft' || event.key === 'a' || event.key === 'A') {
         // 上一章
@@ -101,10 +126,10 @@ export default function ChapterPage({
 
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [novel, params.chapterId, params.id, router])
+  }, [novel, chapterId, id, router])
 
   // 获取上一章和下一章
-  const currentChapterIndex = novel?.chapters?.findIndex((ch: any) => ch.id.toString() === params.chapterId) ?? -1
+  const currentChapterIndex = novel?.chapters?.findIndex((ch: any) => ch.id.toString() === chapterId) ?? -1
   const prevChapter = currentChapterIndex > 0 ? novel.chapters[currentChapterIndex - 1] : null
   const nextChapter = currentChapterIndex < (novel?.chapters?.length || 0) - 1 ? novel.chapters[currentChapterIndex + 1] : null
 
@@ -126,7 +151,7 @@ export default function ChapterPage({
           <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-600 mb-2">章节不存在</h3>
           <p className="text-gray-500 mb-4">{error}</p>
-          <Link href={`/novel/${params.id}`}>
+          <Link href={`/novel/${id}`}>
             <Button>返回小说详情</Button>
           </Link>
         </div>
@@ -152,7 +177,7 @@ export default function ChapterPage({
               <Separator orientation="vertical" className="h-6" />
               <div className="hidden md:flex items-center space-x-2 text-sm">
                 <Link 
-                  href={`/novel/${params.id}`}
+                  href={`/novel/${id}`}
                   className="hover:text-blue-600 transition-colors"
                 >
                   {novel?.title || '小说详情'}
@@ -329,7 +354,7 @@ export default function ChapterPage({
 
           {/* Additional Navigation */}
           <div className="flex items-center justify-center mt-8 space-x-4">
-            <Link href={`/novel/${params.id}`}>
+            <Link href={`/novel/${id}`}>
               <Button variant="outline">返回小说详情</Button>
             </Link>
             
@@ -357,7 +382,7 @@ export default function ChapterPage({
               <div className="flex flex-wrap gap-2">
                 {novel.chapters.slice(Math.max(0, currentChapterIndex - 2), currentChapterIndex + 3).map((chap: any, index: number) => {
                   const actualIndex = Math.max(0, currentChapterIndex - 2) + index
-                  const isCurrentChapter = chap.id.toString() === params.chapterId
+                  const isCurrentChapter = chap.id.toString() === chapterId
                   
                   return (
                     <Button

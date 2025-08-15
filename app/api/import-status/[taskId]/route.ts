@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: { taskId: string } }
 ) {
   try {
-    const taskId = params.taskId
+    const { taskId } = await params
     
     if (!process.env.TURSO_AUTH_TOKEN) {
       return NextResponse.json({ error: '数据库服务未配置' }, { status: 500 })

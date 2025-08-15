@@ -1,3 +1,6 @@
 .next/
 .vercel
 .env
+node_modules
+local.db
+npm-debug.log

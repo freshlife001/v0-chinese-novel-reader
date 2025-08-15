@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: { id: string; chapterId: string } }
 ) {
   try {
-    const { id: novelId, chapterId } = params
+    const { id: novelId, chapterId } = await params
     
     const chapterNumber = parseInt(chapterId)
     if (isNaN(chapterNumber)) {
